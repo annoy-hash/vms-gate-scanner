@@ -7,14 +7,17 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f9; padding: 20px; }
-    #reader { width: 100%; max-width: 400px; margin: 0 auto; }
+    #reader { width: 100%; max-width: 400px; margin: 0 auto; min-height: 250px; }
     .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; margin: 20px auto; }
     input { width: 80%; padding: 10px; font-size: 16px; margin-bottom: 10px; text-align: center; }
     button { padding: 10px 20px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
     #result { margin-top: 15px; padding: 15px; border-radius: 5px; font-weight: bold; display: none; }
-    .success { background-color: #d4edda; color: #155724; }
-    .danger { background-color: #f8d7da; color: #721c24; }
-    .warning { background-color: #fff3cd; color: #856404; }
+    
+    /* Notification Status Styles */
+    .result { display: block; }
+    .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
   </style>
 </head>
 <body>
@@ -33,53 +36,56 @@
   </div>
 
   <script>
-    // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxSbfIC5e1ktXy8kA-jVMAd2enRTX-XhCv1dln21vmUDf3HtaUMCmlYy3u2KpjOJGAobQ/exec";
     let isProcessing = false;
 
-async function processPass(scannedToken) {
-  if (!scannedToken || isProcessing) return;
-  
-  isProcessing = true; // Block duplicate rapid scans locally
-  const resDiv = document.getElementById("result");
-  resDiv.style.display = "block";
-  resDiv.className = "warning";
-  resDiv.innerHTML = "Processing pass...";
-
-  try {
-    const response = await fetch(`${APPS_SCRIPT_URL}?action=scan&token=${encodeURIComponent(scannedToken.trim())}`);
-    const data = await response.json();
-
-    if (data.status === "CHECKED_IN") {
-      resDiv.className = "result success";
-      resDiv.innerHTML = `✅ CHECK-IN SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
-    } else if (data.status === "CHECKED_OUT") {
-      resDiv.className = "result success";
-      resDiv.innerHTML = `🚪 CHECK-OUT SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
-    } else if (data.status === "COOLDOWN") {
+    async function processPass(scannedToken) {
+      if (!scannedToken || isProcessing) return;
+      
+      isProcessing = true; // Block duplicate rapid scans locally
+      const resDiv = document.getElementById("result");
+      resDiv.style.display = "block";
       resDiv.className = "result warning";
-      resDiv.innerHTML = `⏳ SCAN COOLDOWN<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
-    } else if (data.status === "EXPIRED") {
-      resDiv.className = "result danger";
-      resDiv.innerHTML = `⚠️ PASS ALREADY USED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
-    } else {
-      resDiv.className = "result danger";
-      resDiv.innerHTML = "❌ ACCESS DENIED<br>Invalid or Unapproved Pass";
+      resDiv.innerHTML = "Processing pass...";
+
+      try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?action=scan&token=${encodeURIComponent(scannedToken.trim())}`);
+        const data = await response.json();
+
+        if (data.status === "CHECKED_IN") {
+          resDiv.className = "result success";
+          resDiv.innerHTML = `✅ CHECK-IN SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
+        } else if (data.status === "CHECKED_OUT") {
+          resDiv.className = "result success";
+          resDiv.innerHTML = `🚪 CHECK-OUT SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
+        } else if (data.status === "COOLDOWN") {
+          resDiv.className = "result warning";
+          resDiv.innerHTML = `⏳ SCAN COOLDOWN<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
+        } else if (data.status === "EXPIRED") {
+          resDiv.className = "result danger";
+          resDiv.innerHTML = `⚠️ PASS ALREADY USED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
+        } else {
+          resDiv.className = "result danger";
+          resDiv.innerHTML = "❌ ACCESS DENIED<br>Invalid or Unapproved Pass";
+        }
+      } catch (err) {
+        resDiv.className = "result danger";
+        resDiv.innerHTML = "⚠️ Network / Verification Error";
+      }
+
+      // 20-second pause before allowing the camera to read another code
+      setTimeout(() => {
+        isProcessing = false;
+      }, 20000);
     }
-  } catch (err) {
-    resDiv.className = "result danger";
-    resDiv.innerHTML = "⚠️ Network / Verification Error";
-  }
 
-  // 20-second pause before allowing the camera to read another code
-  setTimeout(() => {
-    isProcessing = false;
-  }, 20000);
-}
-
-// Initialize Camera Scanner
-const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-html5QrcodeScanner.render((decodedText) => {
-  processPass(decodedText);
-});
+    // Initialize Camera Scanner after page DOM loads completely
+    window.addEventListener("DOMContentLoaded", () => {
+      const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+      html5QrcodeScanner.render((decodedText) => {
+        processPass(decodedText);
+      });
+    });
+  </script>
+</body>
 </html>
