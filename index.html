@@ -35,43 +35,51 @@
   <script>
     // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxSbfIC5e1ktXy8kA-jVMAd2enRTX-XhCv1dln21vmUDf3HtaUMCmlYy3u2KpjOJGAobQ/exec";
+    let isProcessing = false;
 
-    async function processPass(scannedToken) {
-      if (!scannedToken) return;
+async function processPass(scannedToken) {
+  if (!scannedToken || isProcessing) return;
+  
+  isProcessing = true; // Block duplicate rapid scans locally
+  const resDiv = document.getElementById("result");
+  resDiv.style.display = "block";
+  resDiv.className = "warning";
+  resDiv.innerHTML = "Processing pass...";
 
-      const resDiv = document.getElementById("result");
-      resDiv.style.display = "block";
-      resDiv.className = "warning";
-      resDiv.innerHTML = "Processing pass...";
+  try {
+    const response = await fetch(`${APPS_SCRIPT_URL}?action=scan&token=${encodeURIComponent(scannedToken.trim())}`);
+    const data = await response.json();
 
-      try {
-        const response = await fetch(`${APPS_SCRIPT_URL}?action=scan&token=${encodeURIComponent(scannedToken.trim())}`);
-        const data = await response.json();
-
-        if (data.status === "CHECKED_IN") {
-          resDiv.className = "result success";
-          resDiv.innerHTML = `✅ CHECK-IN SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
-        } else if (data.status === "CHECKED_OUT") {
-          resDiv.className = "result success";
-          resDiv.innerHTML = `🚪 CHECK-OUT SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
-        } else if (data.status === "EXPIRED") {
-          resDiv.className = "result danger";
-          resDiv.innerHTML = `⚠️ PASS ALREADY USED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
-        } else {
-          resDiv.className = "result danger";
-          resDiv.innerHTML = "❌ ACCESS DENIED<br>Invalid or Unapproved Pass";
-        }
-      } catch (err) {
-        resDiv.className = "result danger";
-        resDiv.innerHTML = "⚠️ Network / Verification Error";
-      }
+    if (data.status === "CHECKED_IN") {
+      resDiv.className = "result success";
+      resDiv.innerHTML = `✅ CHECK-IN SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
+    } else if (data.status === "CHECKED_OUT") {
+      resDiv.className = "result success";
+      resDiv.innerHTML = `🚪 CHECK-OUT SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
+    } else if (data.status === "COOLDOWN") {
+      resDiv.className = "result warning";
+      resDiv.innerHTML = `⏳ SCAN COOLDOWN<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
+    } else if (data.status === "EXPIRED") {
+      resDiv.className = "result danger";
+      resDiv.innerHTML = `⚠️ PASS ALREADY USED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
+    } else {
+      resDiv.className = "result danger";
+      resDiv.innerHTML = "❌ ACCESS DENIED<br>Invalid or Unapproved Pass";
     }
+  } catch (err) {
+    resDiv.className = "result danger";
+    resDiv.innerHTML = "⚠️ Network / Verification Error";
+  }
 
-    // Initialize Camera Scanner
-    const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-    html5QrcodeScanner.render((decodedText) => {
-      processPass(decodedText);
-    });
-  </script>
-</body>
+  // 20-second pause before allowing the camera to read another code
+  setTimeout(() => {
+    isProcessing = false;
+  }, 20000);
+}
+
+// Initialize Camera Scanner
+const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+html5QrcodeScanner.render((decodedText) => {
+  processPass(decodedText);
+});
 </html>
