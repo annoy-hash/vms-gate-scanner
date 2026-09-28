@@ -6,24 +6,83 @@
   <title>Gate Pass Verification</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #eef2f5; margin: 0; padding: 20px; }
-    .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 420px; margin: 0 auto; position: relative; overflow: hidden; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      text-align: center; 
+      background: #eef2f5; 
+      margin: 0; 
+      padding: 20px; 
+    }
+    .card { 
+      background: white; 
+      padding: 25px; 
+      border-radius: 12px; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+      max-width: 420px; 
+      margin: 0 auto; 
+      position: relative; 
+      overflow: hidden; 
+    }
     h2 { margin-top: 0; color: #333; }
-    #reader { width: 100%; min-height: 280px; border-radius: 8px; overflow: hidden; background: #000; }
+    #reader { 
+      width: 100%; 
+      min-height: 280px; 
+      border-radius: 8px; 
+      overflow: hidden; 
+      background: #000; 
+    }
     
-    /* Input Styling */
-    input { width: 75%; padding: 12px; font-size: 16px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; text-align: center; }
-    button { width: 82%; padding: 12px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    /* Input & Button Styling */
+    input { 
+      width: 75%; 
+      padding: 12px; 
+      font-size: 16px; 
+      margin-bottom: 10px; 
+      border: 1px solid #ccc; 
+      border-radius: 6px; 
+      text-align: center; 
+    }
+    button { 
+      width: 82%; 
+      padding: 12px; 
+      font-size: 16px; 
+      background: #007bff; 
+      color: white; 
+      border: none; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      font-weight: bold; 
+    }
+    button:hover { background: #0056b3; }
     
-    /* Result Display Card */
-    #resultOverlay { display: none; margin-top: 15px; padding: 20px; border-radius: 8px; font-size: 18px; font-weight: bold; }
+    /* Result Display Cards */
+    #resultOverlay { 
+      display: none; 
+      margin-top: 15px; 
+      padding: 20px; 
+      border-radius: 8px; 
+      font-size: 16px; 
+      font-weight: bold; 
+      line-height: 1.5;
+    }
     .success { background-color: #d4edda; color: #155724; border: 2px solid #28a745; }
     .danger { background-color: #f8d7da; color: #721c24; border: 2px solid #dc3545; }
     .warning { background-color: #fff3cd; color: #856404; border: 2px solid #ffc107; }
 
-    /* Scan Flash Effect */
-    .flash-success { animation: flashGreen 0.5s ease-in-out; }
-    @keyframes flashGreen { 0% { background: #28a745; } 100% { background: white; } }
+    /* Attached Document Button */
+    .btn-doc {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 10px 16px;
+      background-color: #17a2b8;
+      color: white !important;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .btn-doc:hover { background-color: #138496; }
   </style>
 </head>
 <body>
@@ -51,7 +110,7 @@
       
       isProcessing = true;
       
-      // Immediately pause scanning hardware visually
+      // Pause camera immediately so it doesn't process frames while waiting for response
       if (html5QrCode && html5QrCode.isScanning) {
         html5QrCode.pause(true);
       }
@@ -65,18 +124,24 @@
         const response = await fetch(`${APPS_SCRIPT_URL}?action=scan&token=${encodeURIComponent(scannedToken.trim())}`);
         const data = await response.json();
 
+        // Helper to generate document button HTML if URL exists
+        let docBtn = "";
+        if (data.docUrl && data.docUrl !== "" && data.docUrl !== "N/A") {
+          docBtn = `<br><a href="${data.docUrl}" target="_blank" class="btn-doc">📄 View Attached Document</a>`;
+        }
+
         if (data.status === "CHECKED_IN") {
           resDiv.className = "success";
-          resDiv.innerHTML = `✅ CHECK-IN LOGGED<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
+          resDiv.innerHTML = `✅ CHECK-IN SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}${docBtn}`;
         } else if (data.status === "CHECKED_OUT") {
           resDiv.className = "success";
-          resDiv.innerHTML = `🚪 CHECK-OUT LOGGED<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
+          resDiv.innerHTML = `🚪 CHECK-OUT SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}${docBtn}`;
         } else if (data.status === "COOLDOWN") {
           resDiv.className = "warning";
-          resDiv.innerHTML = `⏳ RECENTLY SCANNED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
+          resDiv.innerHTML = `⏳ RECENTLY SCANNED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}${docBtn}`;
         } else if (data.status === "EXPIRED") {
           resDiv.className = "danger";
-          resDiv.innerHTML = `⚠️ PASS EXPIRED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
+          resDiv.innerHTML = `⚠️ PASS ALREADY USED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
         } else {
           resDiv.className = "danger";
           resDiv.innerHTML = "❌ ACCESS DENIED<br>Invalid or Unapproved Pass";
@@ -86,7 +151,7 @@
         resDiv.innerHTML = "⚠️ Network / Verification Error";
       }
 
-      // Resume camera after 4 seconds (gives operator plenty of time to read result)
+      // Resume camera scanning after 4 seconds
       setTimeout(() => {
         resDiv.style.display = "none";
         document.getElementById("pinInput").value = "";
@@ -97,11 +162,10 @@
       }, 4000);
     }
 
-    // Initialize Direct Back Camera (No Dropdowns)
+    // Initialize Back Camera directly (No dropdown selectors)
     window.addEventListener("DOMContentLoaded", () => {
       html5QrCode = new Html5Qrcode("reader");
       
-      // Environment mode forces rear camera on mobile devices automatically
       html5QrCode.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: 250 },
@@ -109,10 +173,10 @@
           processPass(decodedText);
         },
         (errorMessage) => {
-          // Silent scan frame retries
+          // Continuous frame scan error suppression
         }
       ).catch(err => {
-        console.error("Camera access failed", err);
+        console.error("Camera access error: ", err);
       });
     });
   </script>
