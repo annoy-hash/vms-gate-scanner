@@ -3,87 +3,116 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gate Visitor Scanner</title>
+  <title>Gate Pass Verification</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f9; padding: 20px; }
-    #reader { width: 100%; max-width: 400px; margin: 0 auto; min-height: 250px; }
-    .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; margin: 20px auto; }
-    input { width: 80%; padding: 10px; font-size: 16px; margin-bottom: 10px; text-align: center; }
-    button { padding: 10px 20px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-    #result { margin-top: 15px; padding: 15px; border-radius: 5px; font-weight: bold; display: none; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #eef2f5; margin: 0; padding: 20px; }
+    .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 420px; margin: 0 auto; position: relative; overflow: hidden; }
+    h2 { margin-top: 0; color: #333; }
+    #reader { width: 100%; min-height: 280px; border-radius: 8px; overflow: hidden; background: #000; }
     
-    /* Notification Status Styles */
-    .result { display: block; }
-    .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    .danger { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-    .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    /* Input Styling */
+    input { width: 75%; padding: 12px; font-size: 16px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; text-align: center; }
+    button { width: 82%; padding: 12px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    
+    /* Result Display Card */
+    #resultOverlay { display: none; margin-top: 15px; padding: 20px; border-radius: 8px; font-size: 18px; font-weight: bold; }
+    .success { background-color: #d4edda; color: #155724; border: 2px solid #28a745; }
+    .danger { background-color: #f8d7da; color: #721c24; border: 2px solid #dc3545; }
+    .warning { background-color: #fff3cd; color: #856404; border: 2px solid #ffc107; }
+
+    /* Scan Flash Effect */
+    .flash-success { animation: flashGreen 0.5s ease-in-out; }
+    @keyframes flashGreen { 0% { background: #28a745; } 100% { background: white; } }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <h2>Gate Pass Scanner</h2>
+  <div class="card" id="mainCard">
+    <h2>Gate Pass Verification</h2>
     <div id="reader"></div>
     
-    <hr style="margin: 20px 0;">
+    <hr style="margin: 25px 0; border: 0; border-top: 1px solid #eee;">
     
     <h3>Manual PIN Entry</h3>
     <input type="text" id="pinInput" placeholder="Enter 6-Digit PIN">
-    <button onclick="processPass(document.getElementById('pinInput').value)">Submit PIN</button>
+    <button onclick="processPass(document.getElementById('pinInput').value)">Verify PIN</button>
 
-    <div id="result"></div>
+    <div id="resultOverlay"></div>
   </div>
 
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxSbfIC5e1ktXy8kA-jVMAd2enRTX-XhCv1dln21vmUDf3HtaUMCmlYy3u2KpjOJGAobQ/exec";
+    let html5QrCode = null;
     let isProcessing = false;
 
     async function processPass(scannedToken) {
       if (!scannedToken || isProcessing) return;
       
-      isProcessing = true; // Block duplicate rapid scans locally
-      const resDiv = document.getElementById("result");
+      isProcessing = true;
+      
+      // Immediately pause scanning hardware visually
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.pause(true);
+      }
+
+      const resDiv = document.getElementById("resultOverlay");
       resDiv.style.display = "block";
-      resDiv.className = "result warning";
-      resDiv.innerHTML = "Processing pass...";
+      resDiv.className = "warning";
+      resDiv.innerHTML = "⏳ SCAN CAPTURED!<br>Verifying with server...";
 
       try {
         const response = await fetch(`${APPS_SCRIPT_URL}?action=scan&token=${encodeURIComponent(scannedToken.trim())}`);
         const data = await response.json();
 
         if (data.status === "CHECKED_IN") {
-          resDiv.className = "result success";
-          resDiv.innerHTML = `✅ CHECK-IN SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
+          resDiv.className = "success";
+          resDiv.innerHTML = `✅ CHECK-IN LOGGED<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
         } else if (data.status === "CHECKED_OUT") {
-          resDiv.className = "result success";
-          resDiv.innerHTML = `🚪 CHECK-OUT SUCCESSFUL<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
+          resDiv.className = "success";
+          resDiv.innerHTML = `🚪 CHECK-OUT LOGGED<br><br><strong>Guest:</strong> ${data.guestName}<br><strong>Time:</strong> ${data.time}`;
         } else if (data.status === "COOLDOWN") {
-          resDiv.className = "result warning";
-          resDiv.innerHTML = `⏳ SCAN COOLDOWN<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
+          resDiv.className = "warning";
+          resDiv.innerHTML = `⏳ RECENTLY SCANNED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
         } else if (data.status === "EXPIRED") {
-          resDiv.className = "result danger";
-          resDiv.innerHTML = `⚠️ PASS ALREADY USED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
+          resDiv.className = "danger";
+          resDiv.innerHTML = `⚠️ PASS EXPIRED<br><br><strong>Guest:</strong> ${data.guestName}<br>${data.message}`;
         } else {
-          resDiv.className = "result danger";
+          resDiv.className = "danger";
           resDiv.innerHTML = "❌ ACCESS DENIED<br>Invalid or Unapproved Pass";
         }
       } catch (err) {
-        resDiv.className = "result danger";
+        resDiv.className = "danger";
         resDiv.innerHTML = "⚠️ Network / Verification Error";
       }
 
-      // 20-second pause before allowing the camera to read another code
+      // Resume camera after 4 seconds (gives operator plenty of time to read result)
       setTimeout(() => {
+        resDiv.style.display = "none";
+        document.getElementById("pinInput").value = "";
         isProcessing = false;
-      }, 20000);
+        if (html5QrCode) {
+          html5QrCode.resume();
+        }
+      }, 4000);
     }
 
-    // Initialize Camera Scanner after page DOM loads completely
+    // Initialize Direct Back Camera (No Dropdowns)
     window.addEventListener("DOMContentLoaded", () => {
-      const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-      html5QrcodeScanner.render((decodedText) => {
-        processPass(decodedText);
+      html5QrCode = new Html5Qrcode("reader");
+      
+      // Environment mode forces rear camera on mobile devices automatically
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (decodedText) => {
+          processPass(decodedText);
+        },
+        (errorMessage) => {
+          // Silent scan frame retries
+        }
+      ).catch(err => {
+        console.error("Camera access failed", err);
       });
     });
   </script>
